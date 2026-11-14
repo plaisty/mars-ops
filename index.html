@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mars Ops: Mission Decision Engine</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+:root{color-scheme:dark;--bg:#0a0f1a;--panel:#121a2b;--line:#25324d;--tx:#e6edf7;--mu:#8d9bb5;--mars:#e8643a;--teal:#4fd1c5;--amb:#f2b84b;--red:#ff5d6c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;background:radial-gradient(1200px 600px at 80% -10%,#2a1710 0,transparent 60%),var(--bg);color:var(--tx);font:16px/1.5 "IBM Plex Sans",system-ui,sans-serif}
+h1,h2,h3{font-family:"Barlow Condensed","Arial Narrow",sans-serif;margin:0;letter-spacing:.02em}
+main{max-width:980px;margin:0 auto;padding:14px}
+header.top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+header.top h1{font-size:26px}header.top span{color:var(--mu);font-size:13px}
+.dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:linear-gradient(var(--bg) 85%,transparent);padding:6px 0 12px}
+.bar{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.bar .l{display:flex;justify-content:space-between;font-size:13px;color:var(--mu)}
+.bar .l b{color:var(--tx);font-weight:500}
+.track{height:7px;background:#0b1424;border-radius:4px;margin-top:6px;overflow:hidden}
+.fill{height:100%;width:0;border-radius:4px;transition:width .5s cubic-bezier(.2,.8,.2,1),background .3s}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:6px}
+.panel h2{font-size:28px;color:var(--amb)}.panel p.sub{color:var(--mu);margin:4px 0 12px}
+h3.g{font-size:19px;margin:16px 0 8px;color:var(--teal)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.card{text-align:left;background:#0e1626;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:12px;font:inherit;cursor:pointer;transition:border-color .2s,transform .15s,background .2s}
+.card:hover{border-color:var(--mars);transform:translateY(-2px)}
+.card:focus-visible,.btn:focus-visible{outline:2px solid var(--amb);outline-offset:2px}
+.card.on{border-color:var(--teal);background:#0f2230;box-shadow:0 0 0 1px var(--teal) inset}
+.card h4{margin:0 0 4px;font:700 18px "Barlow Condensed",sans-serif}
+.card .d{font-size:13px;color:var(--mu)}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:12px}
+.tags i{font-style:normal;background:#18233a;border-radius:4px;padding:1px 7px;color:var(--tx)}
+.tags i.neg{color:var(--red)}.tags i.pos{color:var(--teal)}
+.warn{margin-top:12px;padding:10px 12px;border-radius:6px;background:#3a1219;border:1px solid var(--red);color:#ffc2c8;display:none}
+.warn.show{display:block;animation:shake .35s}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.btn{margin-top:16px;background:var(--mars);color:#1a0903;border:0;border-radius:6px;padding:12px 20px;font:700 18px "Barlow Condensed",sans-serif;cursor:pointer;transition:filter .2s,transform .15s}
+.btn:hover:not(:disabled){filter:brightness(1.12);transform:translateY(-1px)}
+.btn:disabled{background:#3a4258;color:#7f8aa3;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--tx);border:1px solid var(--line);margin-left:8px}
+.crisis{border-left:4px solid var(--red)}
+.log{margin-top:12px;font-size:14px;color:var(--mu)}.log div{padding:4px 0;border-top:1px solid var(--line)}
+.big{font:700 54px "Barlow Condensed",sans-serif}
+.ok{color:var(--teal)}.bad{color:var(--red)}
+#stage{position:relative;height:250px;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:2px 0 8px;background:#05070d}#stage canvas{display:block}#cap{position:absolute;left:12px;bottom:10px;z-index:2;font:700 18px "Barlow Condensed",sans-serif;color:var(--amb);text-shadow:0 1px 6px #000;pointer-events:none}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<main>
+<header class="top"><h1>Mars Ops: Mission Decision Engine</h1><span id="phase"></span></header>
+<section class="dash" aria-label="Kaynak paneli">
+<div class="bar"><div class="l">Bütçe <b id="vB"></b></div><div class="track"><div class="fill" id="fB"></div></div></div>
+<div class="bar"><div class="l">Toplam kütle <b id="vM"></b></div><div class="track"><div class="fill" id="fM"></div></div></div>
+<div class="bar"><div class="l">Güç üretimi <b id="vP"></b></div><div class="track"><div class="fill" id="fP"></div></div></div>
+<div class="bar"><div class="l">Bilimsel değer <b id="vS"></b></div><div class="track"><div class="fill" id="fS"></div></div></div>
+</section>
+<div id="stage"><div id="cap"></div></div>
+<div id="view"></div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const BUDGET=3000,BASE_MASS=2;
+const LAUNCH=[
+{id:'a',n:'Atlas V sınıfı',cap:6,cost:180,d:'Güvenilir, küçük yük. Mars’a küçük gezgin göndermek için yeterli.'},
+{id:'f',n:'Falcon Heavy sınıfı',cap:16,cost:420,d:'Yeniden kullanılabilir yan itiçiler, orta-ağır yük.'},
+{id:'s',n:'SLS Block 1B sınıfı',cap:38,cost:1100,d:'Ağır yük kapasitesi; üs modülleri için uygun ama pahalı.'}];
+const POWER=[
+{id:'sp',n:'Güneş paneli (küçük)',kw:2,mass:.8,cost:60,solar:1,d:'Hafif ve ucuz. Toz ve enlem etkiler.'},
+{id:'sl',n:'Büyük güneş dizisi',kw:6,mass:2.2,cost:150,solar:1,d:'Daha fazla güç, daha fazla kütle. Fırtınada risk.'},
+{id:'rt',n:'Radyoizotop jeneratör (MMRTG)',kw:.11,mass:.05,cost:110,d:'Toza dayanıklı, çok düşük güç. Curiosity’de kullanıldı.'},
+{id:'kp',n:'Kilopower fisyon reaktörü',kw:10,mass:6,cost:420,d:'Güneşten bağımsız yüksek güç; ağır ve pahalı.'}];
+const INSTR=[
+{id:'cam',n:'Mastcam kamera seti',mass:.1,cost:40,kw:.4,sci:15,d:'Panoramik yüksek çözünürlüklü görüntü.'},
+{id:'spec',n:'Lazer spektrometre',mass:.3,cost:90,kw:.8,sci:25,d:'Kayaç kimyasını uzaktan analiz eder.'},
+{id:'drill',n:'Derin sondaj matkabı',mass:1.2,cost:200,kw:2,sci:40,d:'Buz ve alt yüzey örnekleri; su buzunda ek puan.'},
+{id:'moxie',n:'MOXIE oksijen üreteci',mass:.9,cost:160,kw:1.5,sci:35,d:'CO₂’den oksijen üretir; insanlı görev teknolojisi.'}];
+const SITES=[
+{id:'j',n:'Jezero Krateri',d:'Antik nehir deltası. Yaşam izi arama için en iyi yer, ama kayalık ve iniş riski yüksek.',sm:1.3,sol:.95,risk:.17,ice:false},
+{id:'ar',n:'Arcadia Planitia',d:'Yüzeye yakın su buzu. Yüksek enlem nedeniyle güneş enerjisi %30 azalır.',sm:1.15,sol:.7,risk:.12,ice:true},
+{id:'m',n:'Meridiani Planum',d:'Geniş, düz ova. Opportunity’nin indiği güvenli bölge, bilimsel getirisi sınırlı.',sm:.85,sol:1,risk:.04,ice:false}];
+const CRISES=[
+{t:'Küresel toz fırtınası',x:'Atmosfer kararıyor ve panel girdisi düşüyor. Enerji kıt: önceliği kime vereceksin?',o:[
+ {n:'Enerjiyi ısıtıcılara ver',r:'Elektronikler donmadan kurtuldu, ama iletişim kesintiye uğradı; veri kaybı yaşandı.',e:{sci:-15,p:.06}},
+ {n:'Enerjiyi iletişime ver',r:'Veri akışı sürdü ama bazı bileşenler soğuktan hasar gördü; onarım bütçesi gerekti.',e:{b:-90,p:-.07}}]},
+{t:'Matkap sıkıştı',x:'Sondaj matkabı 40 cm derinlikte kaya tabakasına sıkıştı.',o:[
+ {n:'Yedek komutla zorla',r:'Matkap kurtuldu ve örnek alındı ama mekanik aşınma arttı.',e:{sci:10,p:-.06}},
+ {n:'Matkabı bırak, yüzey işine geç',r:'Matkap kayboldu; yüzey ölçümleri sürdü ama derin örnek yok.',e:{sci:-18}}]},
+{t:'Güneş parçacık olayı',x:'Güçlü bir güneş patlaması Mars yörüngesine yaklaşıyor ve radyasyon seviyesi yükseliyor.',o:[
+ {n:'Güvenli moda geç',r:'Elektronik korundu, bilim operasyonları birkaç sol durdu.',e:{sci:-12,p:.05}},
+ {n:'Operasyona devam et',r:'Ek veri toplandı ama bellek hataları ve sistem sıfırlamaları oldu.',e:{sci:12,p:-.1}}]},
+{t:'İniş yazılımında hata',x:'İniş rehberlik yazılımında tutarsızlık bulundu; Mars’a varışa kısa süre var.',o:[
+ {n:'Yer ekibinden acil yama',r:'Yama gönderildi ve test edildi; ekstra mühendis maliyeti oluştu.',e:{b:-120,p:.08}},
+ {n:'Otonom yedek moda geç',r:'Maliyet yok ama yedek algoritma daha az hassas.',e:{p:-.06}}]},
+{t:'Panel tozlanması',x:'Paneller toz ile kaplanıyor ve üretim düşüyor.',o:[
+ {n:'Titreşim ile temizle',r:'Paneller temizlendi, enerji geri geldi; ek operasyon maliyeti oluştu.',e:{b:-40}},
+ {n:'Rüzgârın temizlemesini bekle',r:'Üretim yaklaşık 1 kW düştü ve bir süre böyle kaldı.',e:{pw:-1}}]}];
+
+const S={ph:0,l:null,p:null,ins:[],site:null,cr:[],ci:0,m:{b:0,sci:0,pw:0,p:0},log:[],res:null};
+const $=id=>document.getElementById(id);
+const fmt=n=>(Math.round(n*100)/100).toString().replace('.',',');
+
+function calc(){
+ const ins=S.ins.map(i=>INSTR.find(x=>x.id===i)),l=LAUNCH.find(x=>x.id===S.l),p=POWER.find(x=>x.id===S.p),st=S.site?SITES.find(x=>x.id===S.site):null;
+ const b=BUDGET-(l?l.cost:0)-(p?p.cost:0)-ins.reduce((a,i)=>a+i.cost,0)+S.m.b;
+ const mass=BASE_MASS+(p?p.mass:0)+ins.reduce((a,i)=>a+i.mass,0);
+ const gen=Math.max(0,(p?p.kw*(p.solar&&st?st.sol:1):0)+S.m.pw);
+ const use=ins.reduce((a,i)=>a+i.kw,0);
+ let sci=ins.reduce((a,i)=>a+i.sci,0)*(st?st.sm:1)+(st&&st.ice&&S.ins.includes('drill')?20:0)+S.m.sci;
+ return{b,mass,cap:l?l.cap:0,gen,use,sci:Math.max(0,Math.round(sci)),l,p,st};
+}
+function setBar(f,pct,col){const e=$(f);e.style.width=Math.max(0,Math.min(100,pct))+'%';e.style.background=col}
+function dash(){
+ const c=calc();
+ $('vB').textContent='$'+Math.round(c.b)+' M';
+ setBar('fB',c.b/BUDGET*100,c.b<0?'var(--red)':c.b<500?'var(--amb)':'var(--teal)');
+ $('vM').textContent=fmt(c.mass)+' / '+(c.cap?c.cap:'-')+' t';
+ setBar('fM',c.cap?c.mass/c.cap*100:0,c.mass>c.cap&&c.cap?'var(--red)':c.mass>c.cap*.85?'var(--amb)':'var(--teal)');
+ $('vP').textContent=fmt(c.gen-c.use)+' kW serbest ('+fmt(c.use)+' / '+fmt(c.gen)+')';
+ setBar('fP',c.gen?c.use/c.gen*100:(c.use?100:0),c.use>c.gen?'var(--red)':c.use>c.gen*.85?'var(--amb)':'var(--teal)');
+ $('vS').textContent=c.sci+' puan';
+ setBar('fS',c.sci/150*100,'var(--mars)');
+ return c;
+}
+function tags(o,pw){
+ let t='';
+ if(o.cap)t+=`<i class="pos">+${o.cap} t kapasite</i>`;
+ if(o.mass!==undefined)t+=`<i>${fmt(o.mass)} t</i>`;
+ if(o.cost!==undefined)t+=`<i class="neg">−$${o.cost} M</i>`;
+ if(o.kw!==undefined)t+=pw?`<i class="pos">+${fmt(o.kw)} kW</i>`:`<i class="neg">−${fmt(o.kw)} kW</i>`;
+ if(o.sci)t+=`<i class="pos">+${o.sci} bilim</i>`;
+ return `<div class="tags">${t}</div>`;
+}
+function card(o,on,fn,pw){return `<button class="card${on?' on':''}" onclick="${fn}" aria-pressed="${on}"><h4>${o.n}</h4><div class="d">${o.d}</div>${tags(o,pw)}</button>`}
+function pick(k,id){S[k]=id;render()}
+function tog(id){const i=S.ins.indexOf(id);i<0?S.ins.push(id):S.ins.splice(i,1);render()}
+
+function render(){
+ const c=dash(),v=$('view');
+ $('phase').textContent=['Hazırlık','Aşama 1 / 3: Araç seçimi','Aşama 2 / 3: İniş bölgesi','Aşama 3 / 3: Kriz yönetimi','Misyon raporu'][S.ph];
+ if(S.ph===0){
+  v.innerHTML=`<div class="panel"><h2>Misyon direktörü, göreve hoş geldin</h2><p class="sub">Bütçen $${BUDGET} M. Bir fırlatma aracı, güç kaynağı ve bilimsel cihazlar seç; sonra iniş bölgesini belirle. Seferin sonunda iki kriz karşına çıkacak ve kararların misyonun kaderini belirleyecek.</p><p>Değerler gerçek NASA misyonlarından (Curiosity, Perseverance, Opportunity, MOXIE) esinlenmiş yaklaşık rakamlardır.</p><button class="btn" onclick="S.ph=1;render()">Göreve başla</button></div>`;
+ }
+ else if(S.ph===1){
+  const msgs=[];
+  if(c.cap&&c.mass>c.cap)msgs.push(`Kütle sınırı aşıldı: ${fmt(c.mass)} t > ${c.cap} t. Daha güçlü bir roket seç veya cihaz çıkar.`);
+  if(c.b<0)msgs.push('Bütçe aşıldı. Seçimlerini azalt.');
+  if(c.use>c.gen)msgs.push(`Güç yetersiz: cihazlar ${fmt(c.use)} kW çekiyor, üretim ${fmt(c.gen)} kW.`);
+  const ready=c.l&&c.p&&S.ins.length&&!msgs.length;
+  v.innerHTML=`<div class="panel"><h2>Araç ve modül seçimi</h2><p class="sub">İniş sistemi sabit ${BASE_MASS} t kütleye sahiptir. Her seçim kütle, bütçe ve güç değerlerini etkiler.</p>
+  <h3 class="g">1. Fırlatma aracı</h3><div class="grid">${LAUNCH.map(o=>card(o,S.l===o.id,`pick('l','${o.id}')`)).join('')}</div>
+  <h3 class="g">2. Güç kaynağı</h3><div class="grid">${POWER.map(o=>card(o,S.p===o.id,`pick('p','${o.id}')`,1)).join('')}</div>
+  <h3 class="g">3. Bilimsel cihazlar (birden fazla seçebilirsin)</h3><div class="grid">${INSTR.map(o=>card(o,S.ins.includes(o.id),`tog('${o.id}')`)).join('')}</div>
+  <div class="warn${msgs.length?' show':''}" role="alert">${msgs.join('<br>')}</div>
+  <button class="btn" ${ready?'':'disabled'} onclick="S.ph=2;render()">İniş bölgesini seç</button></div>`;
+ }
+ else if(S.ph===2){
+  v.innerHTML=`<div class="panel"><h2>İniş bölgesi</h2><p class="sub">Seçim, iniş riskini, güneş enerjisini ve bilimsel getiriyi değiştirir.</p><div class="grid">${SITES.map(s=>`<button class="card${S.site===s.id?' on':''}" onclick="pick('site','${s.id}')" aria-pressed="${S.site===s.id}"><h4>${s.n}</h4><div class="d">${s.d}</div><div class="tags"><i class="neg">İniş riski %${Math.round(s.risk*100)}</i><i>Güneş ×${s.sol}</i><i class="pos">Bilim ×${s.sm}</i>${s.ice?'<i class="pos">Su buzu</i>':''}</div></button>`).join('')}</div>
+  <div class="warn${S.site&&c.use>c.gen?' show':''}" role="alert">Bu bölgede üretim ${fmt(c.gen)} kW; cihazların ${fmt(c.use)} kW gerektiriyor. Cihazlar çalışamayabilir.</div>
+  <button class="btn" ${S.site?'':'disabled'} onclick="startCrises()">İnişe geç ve krizleri karşıla</button><button class="btn ghost" onclick="S.ph=1;S.site=null;render()">Geri dön</button></div>`;
+ }
+ else if(S.ph===3){
+  const k=S.cr[S.ci];
+  v.innerHTML=`<div class="panel crisis"><h2>Kriz ${S.ci+1} / 2: ${k.t}</h2><p class="sub">${k.x}</p><div class="grid">${k.o.map((o,i)=>`<button class="card" onclick="decide(${i})"><h4>${o.n}</h4>${tags(fx(o.e),1)}</button>`).join('')}</div>${logHtml()}</div>`;
+ }
+ else finish(c);
+ if(window.setScene)window.setScene();
+}
+function fx(e){const o={};if(e.b)o.cost=-e.b;if(e.sci)o.sci=e.sci;return o}
+function logHtml(){return S.log.length?`<div class="log">${S.log.map(l=>`<div>${l}</div>`).join('')}</div>`:''}
+function startCrises(){S.cr=[...CRISES].sort(()=>Math.random()-.5).slice(0,2);S.ci=0;S.ph=3;render()}
+function decide(i){
+ const o=S.cr[S.ci].o[i],e=o.e;
+ S.m.b+=e.b||0;S.m.sci+=e.sci||0;S.m.pw+=e.pw||0;S.m.p+=e.p||0;
+ S.log.push(`<b>${S.cr[S.ci].t}:</b> ${o.n}. ${o.r}`);
+ S.ci++;if(S.ci>=2)S.ph=4;render();
+}
+function finish(c){
+ if(!S.res){
+  let p=0.93-c.st.risk+S.m.p;
+  if(c.use>c.gen)p-=.12;
+  if(c.b<0)p-=.1;
+  p=Math.max(.05,Math.min(.97,p));
+  const ok=Math.random()<p;
+  const score=ok?Math.round(c.sci+Math.max(0,c.b)/25):Math.round(c.sci*.15);
+  S.res={ok,p,score};
+ }
+ const r=S.res,rank=!r.ok?'Misyon kaybı':r.score>=150?'Efsanevi direktör':r.score>=100?'Başarılı misyon':'Kısmi başarı';
+ $('view').innerHTML=`<div class="panel"><h2>${r.ok?'İniş başarılı':'İniş başarısız'}</h2><div class="big ${r.ok?'ok':'bad'}">${r.score} puan</div><p class="sub">${rank}. Başarı olasılığın %${Math.round(r.p*100)} idi. ${r.ok?'Araç '+c.st.n+' bölgesine sağ salim indi ve veri göndermeye başladı.':'Araç yüzeye ulaşamadı veya kontak kesildi; yalnızca yörüngeden gelen veri kurtarıldı.'}</p>
+ <p>Kalan bütçe: $${Math.round(c.b)} M. Bilimsel değer: ${c.sci}. Kullanılan kütle: ${fmt(c.mass)} / ${c.cap} t.</p>${logHtml()}
+ <button class="btn" onclick="restart()">Yeni misyon planla</button></div>`;
+}
+function restart(){Object.assign(S,{ph:0,l:null,p:null,ins:[],site:null,cr:[],ci:0,m:{b:0,sci:0,pw:0,p:0},log:[],res:null});render()}
+const GEO={j:[18,77],ar:[47,195],m:[0,-5]};
+try{
+const V=THREE.Vector3,el=$('stage'),cap=$('cap'),R=new THREE.WebGLRenderer({antialias:true});
+R.setPixelRatio(Math.min(devicePixelRatio,2));el.appendChild(R.domElement);
+const sc=new THREE.Scene(),cam=new THREE.PerspectiveCamera(45,1,.1,100);
+sc.add(new THREE.AmbientLight(0x7080b0,.55));const sun=new THREE.DirectionalLight(0xffe2c0,1.4);sun.position.set(5,3,5);sc.add(sun);
+const rnd=(a=1)=>(Math.random()-.5)*a;
+const sp=[];for(let i=0;i<600;i++){const v=new V(rnd(),rnd(),rnd()).normalize().multiplyScalar(40);sp.push(v.x,v.y,v.z)}
+const sg=new THREE.BufferGeometry();sg.setAttribute('position',new THREE.Float32BufferAttribute(sp,3));
+const stars=new THREE.Points(sg,new THREE.PointsMaterial({size:.12,color:0xffffff}));sc.add(stars);
+const cv=document.createElement('canvas');cv.width=512;cv.height=256;const g=cv.getContext('2d');
+g.fillStyle='#b5532f';g.fillRect(0,0,512,256);
+for(let i=0;i<280;i++){g.fillStyle='rgba('+(Math.random()<.5?'90,40,20':'235,160,110')+','+(.05+Math.random()*.12)+')';g.beginPath();g.arc(Math.random()*512,Math.random()*256,4+Math.random()*30,0,7);g.fill()}
+g.fillStyle='rgba(255,255,255,.6)';g.fillRect(0,0,512,9);g.fillRect(0,247,512,9);
+const globe=new THREE.Mesh(new THREE.SphereGeometry(1,56,56),new THREE.MeshStandardMaterial({map:new THREE.CanvasTexture(cv),roughness:1}));sc.add(globe);
+sc.add(new THREE.Mesh(new THREE.SphereGeometry(1.07,40,40),new THREE.MeshBasicMaterial({color:0xff8a50,transparent:true,opacity:.14,side:THREE.BackSide})));
+const M={};
+for(const k in GEO){const la=GEO[k][0]*Math.PI/180,lo=GEO[k][1]*Math.PI/180;
+ const m=new THREE.Mesh(new THREE.SphereGeometry(.035,12,12),new THREE.MeshBasicMaterial({color:0xf2b84b}));
+ m.position.set(Math.cos(la)*Math.sin(lo),Math.sin(la),Math.cos(la)*Math.cos(lo)).multiplyScalar(1.02);globe.add(m);M[k]=m}
+// uzay aracı
+const craft=new THREE.Group(),panels=new THREE.Group(),mat=c=>new THREE.MeshStandardMaterial({color:c,roughness:.5,metalness:.4});
+craft.add(new THREE.Mesh(new THREE.CylinderGeometry(.05,.075,.15,16),mat(0xdddddd)));
+for(const s of[-1,1]){const p=new THREE.Mesh(new THREE.BoxGeometry(.26,.012,.09),mat(0x2a5bd7));p.position.x=s*.17;panels.add(p)}
+craft.add(panels);craft.scale.setScalar(1.3);sc.add(craft);
+// toz
+const dn=300,dp=new Float32Array(dn*3);for(let i=0;i<dn*3;i++)dp[i]=rnd(7);
+const dg=new THREE.BufferGeometry();dg.setAttribute('position',new THREE.BufferAttribute(dp,3));
+const dust=new THREE.Points(dg,new THREE.PointsMaterial({size:.06,color:0xd9885a,transparent:true,opacity:.6}));dust.visible=false;sc.add(dust);
+// zemin
+const ground=new THREE.Group(),pg=new THREE.PlaneGeometry(16,16,56,56),pa=pg.attributes.position;
+for(let i=0;i<pa.count;i++)pa.setZ(i,Math.sin(pa.getX(i)*.6)*.22+Math.cos(pa.getY(i)*.8)*.18+rnd(.08));
+pg.computeVertexNormals();
+const terr=new THREE.Mesh(pg,new THREE.MeshStandardMaterial({color:0xa4492a,flatShading:true,roughness:1}));terr.rotation.x=-Math.PI/2;ground.add(terr);
+for(let i=0;i<14;i++){const r=new THREE.Mesh(new THREE.DodecahedronGeometry(.1+Math.random()*.15),mat(0x6b3320));r.position.set(rnd(10),.1,rnd(10));ground.add(r)}
+const rover=new THREE.Group();ground.add(rover);
+const fn=120,fp=new Float32Array(fn*3),fg=new THREE.BufferGeometry();fg.setAttribute('position',new THREE.BufferAttribute(fp,3));
+const fire=new THREE.Points(fg,new THREE.PointsMaterial({size:.16,color:0xff7a2a,transparent:true,opacity:.85,blending:THREE.AdditiveBlending}));ground.add(fire);
+ground.visible=false;sc.add(ground);
+function build(){
+ while(rover.children.length)rover.remove(rover.children[0]);
+ const b=new THREE.Mesh(new THREE.BoxGeometry(1.1,.3,.7),mat(0xcfd6e4));b.position.y=.55;rover.add(b);
+ for(const x of[-.45,0,.45])for(const z of[-.42,.42]){const w=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,.12,16),mat(0x222a38));w.rotation.x=Math.PI/2;w.position.set(x,.3,z);rover.add(w)}
+ const mast=new THREE.Mesh(new THREE.CylinderGeometry(.02,.02,.6),mat(0x999999));mast.position.set(.4,.95,0);rover.add(mast);
+ const hd=new THREE.Mesh(new THREE.BoxGeometry(.18,.1,.12),mat(0x222a38));hd.position.set(.4,1.28,0);rover.add(hd);
+ const cols=[0x4fd1c5,0xf2b84b,0xe8643a,0x9d7bff];
+ S.ins.forEach((id,i)=>{const c=new THREE.Mesh(new THREE.BoxGeometry(.14,.14,.14),new THREE.MeshBasicMaterial({color:cols[INSTR.findIndex(x=>x.id===id)]}));c.position.set(-.4+i*.2,.78,0);rover.add(c)});
+ const w=({sp:.8,sl:1.5})[S.p];
+ if(w){const p=new THREE.Mesh(new THREE.BoxGeometry(.9*w,.03,.6),mat(0x2a5bd7));p.position.set(-.1,.82,.0);p.position.y=1.05;rover.add(p)}
+ if(S.p==='kp'){const r=new THREE.Mesh(new THREE.CylinderGeometry(.12,.2,.8,12),mat(0xf2b84b));r.position.set(-.8,.5,0);rover.add(r)}
+ if(S.p==='rt'){const r=new THREE.Mesh(new THREE.CylinderGeometry(.1,.1,.3,12),mat(0x666666));r.rotation.z=Math.PI/2;r.position.set(-.7,.5,0);rover.add(r)}
+}
+let lastPh=-1;
+window.setScene=function(){
+ const ph=S.ph,st=S.site?SITES.find(x=>x.id===S.site):null;
+ panels.visible=!['rt','kp'].includes(S.p);panels.scale.setScalar(S.p==='sl'?1.4:S.p==='sp'?.9:1);
+ if(ph===4){build();const ok=S.res.ok;sc.fog=new THREE.FogExp2(ok?0x4a2a1c:0x1c0e0e,.05);R.setClearColor(ok?0x5a3321:0x1c0e0e);
+  rover.rotation.z=ok?0:.45;rover.position.y=ok?0:-.12;fire.visible=!ok;
+  cap.textContent=ok?(st.n+': iniş başarılı'):(st.n+': araç kaybedildi')}
+ else{sc.fog=null;R.setClearColor(0x05070d);
+  cap.textContent=['Mars yörüngesi','Mars yörüngesi: aracını tasarla',st?st.n+' bölgesi seçildi':'Hedef bölgeyi seç','İniş ve kriz yönetimi'][ph]}
+};
+function rs(){const w=el.clientWidth,h=el.clientHeight;R.setSize(w,h);cam.aspect=w/h;cam.updateProjectionMatrix()}
+new ResizeObserver(rs).observe(el);rs();
+let zc=4.2;
+function loop(t){requestAnimationFrame(loop);
+ const ph=S.ph,s=S.site,tt=t/1000,on=ph<4;
+ globe.visible=craft.visible=on;stars.visible=on;ground.visible=!on;dust.visible=ph===3||(ph===4&&S.res&&S.res.ok&&false);
+ for(const k in M){const sel=s===k;M[k].material.color.set(sel?0x4fd1c5:0xf2b84b);M[k].scale.setScalar(sel?1.8+.4*Math.sin(tt*5):1)}
+ if(on){
+  const has=s&&ph>=2;
+  if(has){const tg=-GEO[s][1]*Math.PI/180;let d=((tg-globe.rotation.y+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;globe.rotation.y+=d*.05}
+  else globe.rotation.y+=.003;
+  zc+=((ph===3?2.9:4.2)-zc)*.04;cam.position.set(0,.8,zc);cam.lookAt(0,0,0);
+  if(ph<3){const a=tt*.5;craft.position.set(Math.cos(a)*1.7,.5*Math.sin(a*.7),Math.sin(a)*1.7)}
+  else{const la=GEO[s][0]*Math.PI/180,r=1.9-S.ci*.6;craft.position.lerp(new V(0,Math.sin(la),Math.cos(la)).multiplyScalar(r),.03)}
+  craft.lookAt(0,0,0);craft.rotation.z+=.02;
+  if(dust.visible){const p=dg.attributes.position;for(let i=0;i<dn;i++){let x=p.getX(i)+.05;if(x>3.5)x=-3.5;p.setX(i,x)}p.needsUpdate=true}
+ }else{
+  cam.position.set(Math.cos(tt*.2)*5,1.9,Math.sin(tt*.2)*5);cam.lookAt(0,.4,0);
+  if(!S.res.ok){const p=fg.attributes.position;for(let i=0;i<fn;i++){let y=p.getY(i)+.03+Math.random()*.02;if(y>1.6||p.getX(i)===0){p.setXYZ(i,rnd(.8),0,rnd(.8));continue}p.setY(i,y)}p.needsUpdate=true}
+ }
+ R.render(sc,cam)}
+requestAnimationFrame(loop);
+}catch(e){$('stage').style.display='none';console.error(e)}
+render();
+</script>
+</body>
+</html>
